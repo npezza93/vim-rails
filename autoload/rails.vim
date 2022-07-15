@@ -484,22 +484,10 @@ function! s:readable_controller_name(...) dict abort
     return s:sub(f,'^app/controllers/(.{-})%(_controller)=\.rb$','\1')
   elseif f =~# '^app/mailers/.*\.rb$'
     return s:sub(f,'^app/mailers/(.{-})\.rb$','\1')
-  elseif f =~# '^\%(test\|spec\)/mailers/previews/.*_preview\.rb$'
-    return s:sub(f,'^%(test|spec)/mailers/previews/(.{-})_preview\.rb$','\1')
   elseif f =~# '^app/jobs/.*\.rb$'
     return s:sub(f,'^app/jobs/(.{-})%(_job)=\.rb$','\1')
   elseif f =~# '^test/\%(functional\|controllers\)/.*_test\.rb$'
     return s:sub(f,'^test/%(functional|controllers)/(.{-})%(_controller)=_test\.rb$','\1')
-  elseif f =~# '^test/\%(unit/\)\?helpers/.*_helper_test\.rb$'
-    return s:sub(f,'^test/%(unit/)?helpers/(.{-})_helper_test\.rb$','\1')
-  elseif f =~# '^spec/controllers/.*_spec\.rb$'
-    return s:sub(f,'^spec/controllers/(.{-})%(_controller)=_spec\.rb$','\1')
-  elseif f =~# '^spec/jobs/.*_spec\.rb$'
-    return s:sub(f,'^spec/jobs/(.{-})%(_job)=_spec\.rb$','\1')
-  elseif f =~# '^spec/helpers/.*_helper_spec\.rb$'
-    return s:sub(f,'^spec/helpers/(.{-})_helper_spec\.rb$','\1')
-  elseif f =~# '^spec/views/.*/\w\+_view_spec\.rb$'
-    return s:sub(f,'^spec/views/(.{-})/\w+_view_spec\.rb$','\1')
   elseif f =~# '^app/models/.*\.rb$' && self.type_name('mailer')
     return s:sub(f,'^app/models/(.{-})\.rb$','\1')
   elseif f =~# '^\%(public\|app/assets\)/stylesheets/[^.]\+\.'
@@ -535,18 +523,6 @@ function! s:readable_model_name(...) dict abort
     return s:sub(f,'^test/unit/(.*)_observer_test\.rb$','\1')
   elseif f =~# '^test/\%(unit\|models\)/.*_test\.rb$'
     return s:sub(f,'^test/%(unit|models)/(.*)_test\.rb$','\1')
-  elseif f =~# '^spec/models/.*_spec\.rb$'
-    return s:sub(f,'^spec/models/(.*)_spec\.rb$','\1')
-  elseif f =~# '^\%(test\|spec\)/blueprints/.*\.rb$'
-    return s:sub(f,'^%(test|spec)/blueprints/(.{-})%(_blueprint)=\.rb$','\1')
-  elseif f =~# '^\%(test\|spec\)/exemplars/.*_exemplar\.rb$'
-    return s:sub(f,'^%(test|spec)/exemplars/(.*)_exemplar\.rb$','\1')
-  elseif f =~# '^\%(test/\|spec/\)\=factories/.*_factory\.rb$'
-    return s:sub(f,'^%(test/|spec/)=factories/(.{-})_factory.rb$','\1')
-  elseif f =~# '^\%(test/\|spec/\)\=fabricators/.*\.rb$'
-    return s:sub(f,'^%(test/|spec/)=fabricators/(.{-})_fabricator.rb$','\1')
-  elseif f =~# '^\%(test\|spec\)/\%(fixtures\|factories\|fabricators\)/.*\.\w\+$'
-    return rails#singularize(s:sub(f,'^%(test|spec)/\w+/(.*)\.\w+$','\1'))
   elseif a:0 && a:1
     return rails#singularize(s:sub(self.controller_name(), '_mailer$', ''))
   endif
@@ -796,8 +772,6 @@ function! s:readable_calculate_file_type() dict abort
     let r = "controller"
   elseif f =~# '^test/test_helper\.rb$'
     let r = "test"
-  elseif f =~# '^spec/\%(spec\|rails\)_helper\.rb$'
-    let r = "spec"
   elseif f =~# '_helper\.rb$'
     let r = "helper"
   elseif f =~# '^app/mailers/.*\.rb'
@@ -843,32 +817,20 @@ function! s:readable_calculate_file_type() dict abort
     let r = s:sub(f,'.*<test/(\w*)s/.*','test-\1')
   elseif f =~# '^test/.*_test\.rb'
     let r = "test"
-  elseif f =~# '^spec/lib/.*_spec\.rb$'
-    let r = 'spec-lib'
   elseif f =~# '^lib/.*\.rb$'
     let r = 'lib'
-  elseif f =~# '^spec/\w*s/.*_spec\.rb$'
-    let r = s:sub(f,'.*<spec/(\w*)s/.*','spec-\1')
   elseif f =~# '^features/.*\.feature$'
     let r = 'cucumber-feature'
   elseif f =~# '^features/step_definitions/.*_steps\.rb$'
     let r = 'cucumber-steps'
   elseif f =~# '^features/.*\.rb$'
     let r = 'cucumber'
-  elseif f =~# '^spec/.*\.feature$'
-    let r = 'spec-feature'
   elseif f =~# '^\%(test\|spec\)/fixtures\>'
     if e ==# "yml"
       let r = "fixtures-yaml"
     else
       let r = "fixtures" . (empty(e) ? "" : "-" . e)
     endif
-  elseif f =~# '^\%(test\|spec\)/\%(factories\|fabricators\)\>'
-    let r = "fixtures-replacement"
-  elseif f =~# '^spec/.*_spec\.rb'
-    let r = "spec"
-  elseif f =~# '^spec/support/.*\.rb'
-    let r = "spec"
   elseif f =~# '^db/migrate\>'
     let r = "db-migration"
   elseif f=~# '^db/schema\.rb$'
@@ -1337,19 +1299,12 @@ function! s:readable_test_file_candidates() dict abort
   let projected = self.projected('railsTest') + self.projected('test')
   if self.type_name('view')
     let tests = [
-          \ fnamemodify(f,':s?\<app/?spec/?')."_spec.rb",
-          \ fnamemodify(f,':r:s?\<app/?spec/?')."_spec.rb",
-          \ fnamemodify(f,':r:r:s?\<app/?spec/?')."_spec.rb",
           \ s:sub(s:sub(f,'<app/views/','test/controllers/'),'/[^/]*$','_controller_test.rb'),
           \ s:sub(s:sub(f,'<app/views/','test/functional/'),'/[^/]*$','_controller_test.rb')]
   elseif self.type_name('lib')
     let tests = [
           \ s:sub(f,'<lib/(.*)\.rb$','test/lib/\1_test.rb'),
-          \ s:sub(f,'<lib/(.*)\.rb$','test/unit/\1_test.rb'),
-          \ s:sub(f,'<lib/(.*)\.rb$','spec/lib/\1_spec.rb')]
-  elseif self.type_name('fixtures') && f =~# '\<spec/'
-    let tests = [
-          \ 'spec/models/' . self.model_name() . '_spec.rb']
+          \ s:sub(f,'<lib/(.*)\.rb$','test/unit/\1_test.rb')]
   elseif self.type_name('fixtures')
     let tests = [
           \ 'test/models/' . self.model_name() . '_test.rb',
@@ -1501,8 +1456,6 @@ function! s:readable_default_rake_task(...) dict abort
       else
         return 'test:units TEST='.s:rquote(test).opts
       endif
-    elseif test =~# '^spec\>'
-      return 'spec SPEC='.s:rquote(with_line)
     elseif test =~# '^features\>'
       return 'cucumber FEATURE='.s:rquote(with_line)
     else
@@ -1869,10 +1822,6 @@ function! s:RunnerCommand(bang, count, arg) abort
           let extra = ''
         endif
       endif
-    elseif arg =~# '^spec\%(/.*\%(_spec\.rb\|\.feature\)\)\=$'
-      let compiler = 'rspec'
-    elseif arg =~# '^features\%(/.*\.feature\)\=$'
-      let compiler = 'cucumber'
     else
       let compiler = 'ruby'
     endif
@@ -1889,7 +1838,7 @@ function! s:RunnerCommand(bang, count, arg) abort
     if compiler ==# 'ruby'
       let &l:makeprg = rails#app().prepare_rails_command('runner')
       let extra = ''
-    elseif &makeprg =~# '^\%(testrb\|rspec\|cucumber\)\>' && rails#app().has_zeus()
+    elseif &makeprg =~# '^\%(testrb\)\>' && rails#app().has_zeus()
       let &l:makeprg = 'zeus ' . &l:makeprg
     elseif compiler ==# 'rubyunit'
       let &l:makeprg = 'ruby -Itest'
@@ -2073,8 +2022,6 @@ function! rails#complete_rails(ArgLead, CmdLine, P, ...) abort
     elseif target ==# 'integration_test' || target ==# 'integration_spec' || target ==# 'feature'
       return s:autocamelize(
             \ app.relglob('test/integration/','**/*','_test.rb') +
-            \ app.relglob('spec/features/', '**/*', '_spec.rb') +
-            \ app.relglob('spec/requests/', '**/*', '_spec.rb') +
             \ app.relglob('features/', '**/*', '.feature'), a:ArgLead)
     elseif target ==# 'migration' || target ==# 'session_migration'
       return s:migrationList(a:ArgLead,"","")
@@ -2749,9 +2696,6 @@ function! s:BufProjectionCommands() abort
   call s:addfilecmds("layout", defer)
   call s:addfilecmds("fixtures", defer)
   call s:addfilecmds("locale", defer)
-  if rails#app().has('spec')
-    call s:addfilecmds("spec", defer)
-  endif
   call s:addfilecmds("stylesheet", defer)
   call s:addfilecmds("javascript", defer)
   for [name, command] in items(rails#app().commands())
@@ -2844,9 +2788,6 @@ endfunction
 function! s:fixturesList(A,L,P)
   return s:completion_filter(
         \ rails#app().relglob('test/fixtures/', '**/*') +
-        \ rails#app().relglob('spec/fixtures/', '**/*') +
-        \ rails#app().relglob('test/factories/', '**/*') +
-        \ rails#app().relglob('spec/factories/', '**/*'),
         \ a:A)
 endfunction
 
@@ -3019,7 +2960,7 @@ function! s:fixturesEdit(cmd,...)
   let e = fnamemodify(c,':e')
   let e = e == '' ? e : '.'.e
   let c = fnamemodify(c,':r')
-  let dirs = ['test/fixtures', 'spec/fixtures', 'test/factories', 'spec/factories']
+  let dirs = ['test/fixtures']
   let file = get(filter(copy(dirs), 's:isdirectory(rails#app().path(v:val))'), 0, dirs[0]).'/'.c.e
   if file =~ '\.\w\+$' && rails#app().find_file(c.e, dirs, []) ==# ''
     return s:edit(a:cmd,file)
@@ -4205,8 +4146,7 @@ function! s:app_smart_projections() dict abort
       let singular = rails#singularize(dir)
       let glob = 'app/' . dir . '/*_' . singular . '.rb'
       if dir !~# '\v^%(assets|models|views)$' &&
-            \ !has_key(s:default_projections, glob) &&
-            \ !empty(self.relglob('', glob))
+            \ !has_key(s:default_projections, glob)
         let dict[glob] = {'type': s:gsub(tolower(singular), '\A+', ' ')}
       endif
     endfor
@@ -4266,44 +4206,9 @@ function! s:app_projections() dict abort
   endfor
   call s:combine_projections(dict, self.smart_projections())
   call s:combine_projections(dict, get(g:, 'rails_projections', ''))
-  for gem in keys(get(g:, 'rails_gem_projections', {}))
-    if self.has_gem(gem)
-      try
-        if type(g:rails_gem_projections[gem]) ==# v:t_string
-          let file = g:rails_gem_projections[gem]
-          if file !~# '^\a\+:\|^/'
-            if !has_key(self.gems(), gem)
-              continue
-            endif
-            let file = self.gems()[gem] . '/' . file
-          endif
-          if file =~# '/$'
-            let file .= 'projections.json'
-          endif
-          call s:combine_projections(dict, rails#json_parse(s:readfile(file)))
-        else
-          call s:combine_projections(dict, g:rails_gem_projections[gem])
-        endif
-      catch
-      endtry
-    endif
-  endfor
+
   if self.cache.needs('projections')
     call self.cache.set('projections', {})
-
-    let projections = {}
-    for file in ['config/projections.json', '.projections.json']
-      if self.has_path(file)
-        try
-          let projections = rails#json_parse(s:readfile(self.path(file)))
-          if type(projections) == type({})
-            call self.cache.set('projections', projections)
-            break
-          endif
-        catch /^Vim(\a\+):E474:/
-        endtry
-      endif
-    endfor
   endif
 
   call s:combine_projections(dict, self.cache.get('projections'))
@@ -4458,12 +4363,6 @@ function! s:app_internal_load_path() dict abort
   if self.has('test')
     let path += ['test', 'test/unit', 'test/functional', 'test/integration', 'test/controllers', 'test/helpers', 'test/mailers', 'test/models', 'test/jobs']
   endif
-  if self.has('spec')
-    let path += ['spec', 'spec/controllers', 'spec/helpers', 'spec/mailers', 'spec/models', 'spec/views', 'spec/lib', 'spec/features', 'spec/requests', 'spec/integration', 'spec/jobs']
-  endif
-  if self.has('cucumber')
-    let path += ['features']
-  endif
   call map(path, 'rails#app().path(v:val)')
   return path
 endfunction
@@ -4546,9 +4445,6 @@ function! rails#ruby_setup() abort
       let path += [rails#app().path('app/views/'.rails#buffer().controller_name()), rails#app().path('app/views/application')]
     endif
     call add(path, rails#app().path())
-    if !rails#app().has_rails5()
-      let path += [rails#app().path('vendor/plugins/*/lib'), rails#app().path('vendor/rails/*/lib')]
-    endif
     call extend(exts,
           \ filter(map(keys(rails#app().projections()),
           \ 'matchstr(v:val, "^\\Capp/views/\\*\\.\\zs\\w\\+$")'), 'len(v:val)'))
@@ -4599,11 +4495,6 @@ function! rails#buffer_setup() abort
       call self.setvar('surround_5',   "\r\nend")
       call self.setvar('surround_69',  "\1expr: \1\rend")
       call self.setvar('surround_101', "\r\nend")
-    endif
-    if exists(':UltiSnipsAddFiletypes') == 2
-      UltiSnipsAddFiletypes rails
-    elseif exists(':SnipMateLoadScope') == 2
-      SnipMateLoadScope rails
     endif
   elseif self.name() =~# '\.yml\%(\.example\|sample\)\=$\|\.sql$'
     call self.setvar('&define',self.define_pattern())
@@ -4658,7 +4549,7 @@ function! rails#buffer_setup() abort
     call self.setvar('dispatch', dir . dispatch[0])
   elseif self.name() =~# '^public'
     call self.setvar('dispatch', ':Preview')
-  elseif self.name() =~# '^\%(app\|config\|db\|lib\|log\|README\|Rakefile\|test\|spec\|features\)'
+  elseif self.name() =~# '^\%(app\|config\|db\|lib\|log\|README\|Rakefile\|test\)'
     if self.app().has_rails5()
       call self.setvar('dispatch',
             \ dir .
