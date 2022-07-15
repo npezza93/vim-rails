@@ -3289,11 +3289,11 @@ function! s:findcmdfor(cmd) abort
   let mods_num = matchstr(cmd, '^.\{-\}\ze\a\+\%(\s*+\d\+\)\=$')
   let cmd = strpart(cmd, len(mods_num))
   if cmd == '' || cmd == 'E' || cmd == 'F'
-    return mods_num.'find'.bang
+    return mods_num.'e'.bang
   elseif cmd == 'S'
-    return mods_num.'sfind'.bang
+    return mods_num.'sp'.bang
   elseif cmd == 'V'
-    return 'vert '.mods_num.'sfind'.bang
+    return mods_num.'vsplit'.bang
   elseif cmd == 'T'
     return mods_num.'tab sfind'.bang
   elseif cmd == 'D'
