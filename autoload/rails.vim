@@ -881,8 +881,6 @@ function! s:readable_calculate_file_type() dict abort
     let r = "stylesheet-".ae
   elseif ae ==# "js" || ae ==# "es6"
     let r = "javascript"
-  elseif ae ==# "coffee"
-    let r = "javascript-coffee"
   elseif e ==# "html"
     let r = e
   elseif f =~# '^config/routes\>.*\.rb$'
@@ -947,15 +945,8 @@ endfunction
 function! s:app_has(feature) dict
   let map = {
         \'test': 'test/',
-        \'spec': 'spec/',
         \'bundler': 'Gemfile|gems.locked',
-        \'rails2': 'script/about',
-        \'rails3': 'config/application.rb',
-        \'rails5': 'app/assets/config/manifest.js|config/initializers/application_controller_renderer.rb',
-        \'cucumber': 'features/',
-        \'webpack': 'app/javascript/packs/',
-        \'turnip': 'spec/acceptance/',
-        \'sass': 'public/stylesheets/sass/'}
+        \'rails5': 'app/assets/config/manifest.js|config/initializers/application_controller_renderer.rb'}
   if self.cache.needs('features')
     call self.cache.set('features',{})
   endif
@@ -1659,23 +1650,6 @@ function! s:readable_preview_urls(lnum) dict abort
     call add(urls, '/assets/' . matchstr(self.name(), 'stylesheets/\zs[^.]*') . '.css')
   elseif self.name() =~# '^\%(app\|lib\|vendor\)/assets/javascripts/'
     call add(urls, '/assets/' . matchstr(self.name(), 'javascripts/\zs[^.]*') . '.js')
-  elseif self.name() =~# '^app/javascript/packs/'
-    let file = matchstr(self.name(), 'packs/\zs.\{-\}\%(\.erb\)\=$')
-    if file =~# escape(join(rails#pack_suffixes('css'), '\|'), '.') . '$'
-      let file = fnamemodify(file, ':r') . '.css'
-    elseif file =~# escape(join(rails#pack_suffixes('js'), '\|'), '.') . '$'
-      let file = fnamemodify(file, ':r') . '.js'
-    endif
-    if filereadable(self.app().real('public/packs/manifest.json'))
-      let manifest = rails#json_parse(readfile(self.app().real('public/packs/manifest.json')))
-    else
-      let manifest = {}
-    endif
-    if has_key(manifest, file)
-      call add(urls, manifest[file])
-    else
-      call add(urls, '/packs/' . file)
-    endif
   elseif self.app().has_file('app/mailers/' . self.controller_name() . '.rb')
     if self.type_name('mailer', 'mailerpreview') && len(self.last_method(a:lnum))
       call add(urls, '/rails/mailers/' . self.controller_name() . '/' . self.last_method(a:lnum))
@@ -2309,7 +2283,7 @@ function! s:suffixes(type) abort
     let exts = ['css', 'scss', 'css.scss', 'sass', 'css.sass']
     call extend(exts, map(copy(exts), 'v:val.".erb"'))
   elseif a:type =~# '^javascripts\=$\|^js$'
-    let exts = ['js', 'coffee', 'js.coffee', 'es6']
+    let exts = ['js']
     call extend(exts, map(copy(exts), 'v:val.".erb"'))
     call extend(exts, ['ejs', 'eco', 'jst', 'jst.ejs', 'jst.eco'])
   else
@@ -2586,25 +2560,9 @@ function! s:ruby_cfile() abort
   endif
 
   for [type, suf] in [['javascript', '.js'], ['stylesheet', '.css'], ['asset', '']]
-    let res = s:match_method(type.'_pack_\%(path\|tag\)')
     let appdir = matchstr(expand('%:p'), '.*[\/]app[\/]\ze\%(views\|helpers\)[\/]')
     if empty(appdir) && s:active()
       let appdir = rails#app().path('app/')
-    endif
-    if len(res) && len(appdir)
-      let name = res . suf
-      let suffixes = rails#pack_suffixes(matchstr(name, '\.\zs\w\+$'))
-      call extend(suffixes, map(copy(suffixes), '"/index".v:val'))
-      let dir = appdir . 'javascript' . appdir[-1:-1] . 'packs' . appdir[-1:-1]
-      if len(suffixes)
-        let base = dir . substitute(name, '\.\w\+$', '', '')
-        for suffix in [''] + suffixes
-          if s:filereadable(base . suffix)
-            return base . suffix
-          endif
-        endfor
-        return dir . name
-      endif
     endif
   endfor
 
@@ -3190,18 +3148,6 @@ function! s:resolve_asset(name, ...) abort
   return ''
 endfunction
 
-function! rails#pack_suffixes(type) abort
-  if a:type =~# '^stylesheets\=$\|^css$'
-    let suffixes = ['.sass', '.scss', '.css']
-  elseif a:type =~# '^javascripts\=$\|^js$'
-    let suffixes = ['.coffee', '.js', '.jsx', '.ts', '.vue']
-  else
-    return []
-  endif
-  call extend(suffixes, map(copy(suffixes), 'v:val.".erb"'))
-  return s:uniq(suffixes)
-endfunction
-
 call s:add_methods('readable', ['resolve_view', 'resolve_layout'])
 
 function! s:findview(name, ...) abort
@@ -3264,10 +3210,7 @@ function! s:AssetEdit(cmd, name, dir, suffix, fallbacks) abort
     return s:error("E471: Argument required")
   endif
   let suffixes = s:suffixes(a:dir)
-  let pack_suffixes = rails#app().has('webpack') ? rails#pack_suffixes(suffixes[0][1:-1]) : []
-  call extend(pack_suffixes, map(copy(pack_suffixes), '"/index".v:val'))
   for file in map([''] + suffixes, '"app/assets/".a:dir."/".name.v:val') +
-        \ map(pack_suffixes, '"app/javascript/packs/".name.v:val') +
         \ map(copy(a:fallbacks), 'printf(v:val, name)') +
         \ [   'public/'.a:dir.'/'.name.suffixes[0],
         \ 'app/assets/'.a:dir.'/'.name.(name =~# '\.' ? '' : a:suffix)]
@@ -3281,11 +3224,6 @@ function! s:AssetEdit(cmd, name, dir, suffix, fallbacks) abort
   else
     return s:open(a:cmd, file . jump)
   endif
-endfunction
-
-function! s:javascriptEdit(cmd,...) abort
-  return s:AssetEdit(a:cmd, a:0 ? a:1 : '', 'javascripts',
-        \ rails#app().has_gem('coffee-rails') ? '.coffee' : '.js', [])
 endfunction
 
 function! s:stylesheetEdit(cmd,...) abort
@@ -3304,9 +3242,6 @@ function! s:javascriptList(A, L, P, ...) abort
   let strip = '\%('.escape(join(suffixes, '\|'), '.*[]~').'\)$'
   call map(list,'substitute(v:val,strip,"","")')
   call extend(list, rails#app().relglob("public/".dir."/","**/*",suffixes[0]))
-  for suffix in rails#app().has('webpack') ? rails#pack_suffixes(suffixes[0][1:-1]) : []
-    call extend(list, rails#app().relglob("app/javascript/packs/","**/*",suffix))
-  endfor
   if !empty(a:0 ? a:2 : [])
     call extend(list, a:2)
     call s:uniq(list)
@@ -3703,24 +3638,13 @@ function! s:readable_alternate_candidates(...) dict abort
     return [migration . (exists('lastmethod') && !empty(lastmethod) ? '#'.lastmethod : '')]
   elseif f =~# '\<application\.js$'
     return ['app/helpers/application_helper.rb']
-  elseif f =~# 'spec\.js$'
-    return [s:sub(s:sub(f, 'spec/javascripts', 'app/assets/javascripts'), '_spec.js', '.js')]
-  elseif f =~# 'Spec\.js$'
-    return [s:sub(s:sub(f, 'spec/javascripts', 'app/assets/javascripts'), 'Spec.js', '.js')]
-  elseif f =~# 'spec\.coffee$'
-    return [s:sub(s:sub(f, 'spec/javascripts', 'app/assets/javascripts'), '_spec.coffee', '.coffee')]
-  elseif f =~# 'spec\.js\.coffee$'
-    return [s:sub(s:sub(f, 'spec/javascripts', 'app/assets/javascripts'), '_spec.js.coffee', '.js.coffee')]
   elseif self.type_name('javascript')
     if f =~# 'public/javascripts'
       let to_replace = 'public/javascripts'
     else
       let to_replace = 'app/assets/javascripts'
     endif
-    if f =~# '\.coffee$'
-      let suffix = '.coffee'
-      let suffix_replacement = '_spec.coffee'
-    elseif f =~# '[A-Z][a-z]\+\.js$'
+    if f =~# '[A-Z][a-z]\+\.js$'
       let suffix = '.js'
       let suffix_replacement = 'Spec.js'
     else
@@ -4329,280 +4253,9 @@ function! s:combine_projections(dest, src, ...) abort
   return a:dest
 endfunction
 
-let s:default_projections = {
-      \  "Gemfile": {"alternate": "Gemfile.lock", "type": "lib"},
-      \  "Gemfile.lock": {"alternate": "Gemfile"},
-      \  "README": {"alternate": "config/database.yml"},
-      \  "README.*": {"alternate": "config/database.yml"},
-      \  "Rakefile": {"type": "task"},
-      \  "app/channels/*_channel.rb": {
-      \    "template": [
-      \      "class {camelcase|capitalize|colons}Channel < ActionCable::Channel",
-      \      "end"
-      \    ],
-      \    "type": "channel"
-      \  },
-      \  "app/controllers/*_controller.rb": {
-      \    "affinity": "controller",
-      \    "template": [
-      \      "class {camelcase|capitalize|colons}Controller < ApplicationController",
-      \      "end"
-      \    ],
-      \    "type": "controller"
-      \  },
-      \  "app/controllers/concerns/*.rb": {
-      \    "affinity": "controller",
-      \    "template": [
-      \      "module {camelcase|capitalize|colons}",
-      \      "\tinclude ActiveSupport::Concern",
-      \      "end"
-      \    ],
-      \    "type": "controller"
-      \  },
-      \  "app/helpers/*_helper.rb": {
-      \    "affinity": "controller",
-      \    "template": ["module {camelcase|capitalize|colons}Helper", "end"],
-      \    "type": "helper"
-      \  },
-      \  "app/jobs/*_job.rb": {
-      \    "affinity": "model",
-      \    "template": [
-      \      "class {camelcase|capitalize|colons}Job < ActiveJob::Base",
-      \      "end"
-      \    ],
-      \    "type": "job"
-      \  },
-      \  "app/mailers/*.rb": {
-      \    "affinity": "controller",
-      \    "template": [
-      \      "class {camelcase|capitalize|colons} < ActionMailer::Base",
-      \      "end"
-      \    ]
-      \  },
-      \  "app/models/*.rb": {
-      \    "affinity": "model",
-      \    "template": ["class {camelcase|capitalize|colons}", "end"],
-      \    "type": "model"
-      \  },
-      \  "app/serializers/*_serializer.rb": {
-      \    "template": [
-      \      "class {camelcase|capitalize|colons}Serializer < ActiveModel::Serializer",
-      \      "end"
-      \    ],
-      \    "type": "serializer"
-      \  },
-      \  "config/*.yml": {
-      \    "alternate": [
-      \      "config/{}.example.yml",
-      \      "config/{}.yml.example",
-      \      "config/{}.yml.sample"
-      \    ]
-      \  },
-      \  "config/*.example.yml": {"alternate": "config/{}.yml"},
-      \  "config/*.yml.example": {"alternate": "config/{}.yml"},
-      \  "config/*.yml.sample": {"alternate": "config/{}.yml"},
-      \  "config/application.rb": {"alternate": "config/routes.rb"},
-      \  "config/environment.rb": {"alternate": "config/routes.rb"},
-      \  "config/environments/*.rb": {
-      \    "alternate": ["config/application.rb", "config/environment.rb"],
-      \    "type": "environment"
-      \  },
-      \  "config/initializers/*.rb": {"type": "initializer"},
-      \  "config/routes.rb": {
-      \    "alternate": ["config/application.rb", "config/environment.rb"],
-      \    "type": "initializer"
-      \  },
-      \  "gems.locked": {"alternate": "gems.rb"},
-      \  "gems.rb": {"alternate": "gems.locked", "type": "lib"},
-      \  "lib/*.rb": {"type": "lib"},
-      \  "lib/tasks/*.rake": {"type": "task"}
-      \}
+let s:default_projections = {}
 
-let s:has_projections = {
-      \  "cucumber": {
-      \    "features/*.feature": {
-      \      "template": ["Feature: {underscore|capitalize|blank}"],
-      \      "type": "integration test"
-      \    },
-      \    "features/support/env.rb": {"type": "integration test"}
-      \  },
-      \  "rails2": {"config/environment.rb": {"type": "environment"}},
-      \  "rails3": {"config/application.rb": {"type": "environment"}},
-      \  "spec": {
-      \    "spec/*_spec.rb": {"alternate": "app/{}.rb"},
-      \    "spec/controllers/*_spec.rb": {
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe {camelcase|capitalize|colons}, type: :controller do",
-      \        "end"
-      \      ],
-      \      "type": "functional test"
-      \    },
-      \    "spec/features/*_spec.rb": {
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe \"{underscore|capitalize|blank}\", type: :feature do",
-      \        "end"
-      \      ],
-      \      "type": "integration test"
-      \    },
-      \    "spec/helpers/*_spec.rb": {
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe {camelcase|capitalize|colons}, type: :helper do",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "spec/integration/*_spec.rb": {
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe \"{underscore|capitalize|blank}\", type: :integration do",
-      \        "end"
-      \      ],
-      \      "type": "integration test"
-      \    },
-      \    "spec/lib/*_spec.rb": {"alternate": "lib/{}.rb"},
-      \    "spec/mailers/*_spec.rb": {
-      \      "affinity": "controller",
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe {camelcase|capitalize|colons}, type: :mailer do",
-      \        "end"
-      \      ],
-      \      "type": "functional test"
-      \    },
-      \    "spec/mailers/previews/*_preview.rb": {
-      \      "affinity": "controller",
-      \      "alternate": "app/mailers/{}.rb",
-      \      "template": ["class {camelcase|capitalize|colons}Preview < ActionMailer::Preview", "end"]
-      \    },
-      \    "spec/models/*_spec.rb": {
-      \      "affinity": "model",
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe {camelcase|capitalize|colons}, type: :model do",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "spec/rails_helper.rb": {"type": "integration test"},
-      \    "spec/requests/*_spec.rb": {
-      \      "template": [
-      \        "require 'rails_helper'",
-      \        "",
-      \        "RSpec.describe \"{underscore|capitalize|blank}\", type: :request do",
-      \        "end"
-      \      ],
-      \      "type": "integration test"
-      \    },
-      \    "spec/spec_helper.rb": {"type": "integration test"}
-      \  },
-      \  "test": {
-      \    "test/*_test.rb": {"alternate": "app/{}.rb"},
-      \    "test/controllers/*_test.rb": {
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActionController::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "functional test"
-      \    },
-      \    "test/functional/*_test.rb": {
-      \      "alternate": ["app/controllers/{}.rb", "app/mailers/{}.rb"],
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActionController::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "functional test"
-      \    },
-      \    "test/helpers/*_test.rb": {
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActionView::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "test/integration/*_test.rb": {
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActionDispatch::IntegrationTest",
-      \        "end"
-      \      ],
-      \      "type": "integration test"
-      \    },
-      \    "test/lib/*_test.rb": {"alternate": "lib/{}.rb"},
-      \    "test/mailers/*_test.rb": {
-      \      "affinity": "model",
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActionMailer::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "functional test"
-      \    },
-      \    "test/mailers/previews/*_preview.rb": {
-      \      "affinity": "controller",
-      \      "alternate": "app/mailers/{}.rb",
-      \      "template": ["class {camelcase|capitalize|colons}Preview < ActionMailer::Preview", "end"]
-      \    },
-      \    "test/models/*_test.rb": {
-      \      "affinity": "model",
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActiveSupport::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "test/jobs/*_test.rb": {
-      \      "affinity": "job",
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActiveJob::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "test/test_helper.rb": {"type": "integration test"},
-      \    "test/unit/*_test.rb": {
-      \      "affinity": "model",
-      \      "alternate": ["app/models/{}.rb", "lib/{}.rb"],
-      \      "template": [
-      \        "require 'test_helper'",
-      \        "",
-      \        "class {camelcase|capitalize|colons}Test < ActiveSupport::TestCase",
-      \        "end"
-      \      ],
-      \      "type": "unit test"
-      \    },
-      \    "test/unit/helpers/*_helper_test.rb": {
-      \      "affinity": "controller",
-      \      "alternate": "app/helpers/{}_helper.rb"
-      \    }
-      \  },
-      \  "turnip": {
-      \    "spec/acceptance/*.feature": {
-      \      "template": ["Feature: {underscore|capitalize|blank}"],
-      \      "type": "integration test"
-      \    }
-      \  }
-      \}
+let s:has_projections = {}
 
 function! s:app_projections() dict abort
   let dict = s:combine_projections({}, s:default_projections)
@@ -4884,18 +4537,8 @@ function! rails#sprockets_setup(type) abort
   call s:map_gf()
 endfunction
 
-function! rails#webpacker_setup(type) abort
-  let suf = rails#pack_suffixes(a:type)
-  let &l:suffixesadd = join(s:uniq(suf + split(&l:suffixesadd, ',') + ['/package.json'] + map(copy(suf), '"/index".v:val')), ',')
-  let parent = matchstr(expand('%:p'), '.*\ze[\/]\w\+[\/]javascript[\/]packs')
-  if len(parent) && isdirectory(parent . '/node_modules')
-    call rails#update_path([], [parent . '/node_modules'])
-  endif
-  let b:undo_ftplugin = get(b:, 'undo_ftplugin', 'exe') . '|setlocal pa= sua='
-endfunction
-
 function! rails#ruby_setup() abort
-  let exts = ['raw', 'erb', 'html', 'builder', 'ruby', 'coffee', 'haml', 'jbuilder']
+  let exts = ['raw', 'erb', 'html', 'builder', 'ruby', 'haml', 'jbuilder']
   if s:active()
     let path = rails#app().internal_load_path()
     let path += [rails#app().path('app/views')]

@@ -1,4 +1,4 @@
-if (!exists('*RailsDetect') || !RailsDetect()) && expand('%:p') !~# '.*\ze[\/]\%(app\|config\|lib\|test\|spec\)[\/]'
+if (!exists('*RailsDetect') || !RailsDetect()) && expand('%:p') !~# '.*\ze[\/]\%(app\|config\|lib\|test\\)[\/]'
   finish
 endif
 

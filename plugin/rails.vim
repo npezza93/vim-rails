@@ -116,7 +116,7 @@ augroup railsPluginDetect
         \ endif
   autocmd FileType * if RailsDetect() | call rails#buffer_setup() | endif
 
-  autocmd BufNewFile,BufReadPost *.rjs,*.rxml,*.builder,*.jbuilder,*.ruby
+  autocmd BufNewFile,BufReadPost *.jbuilder,*.ruby
         \ if &filetype !=# 'ruby' | set filetype=ruby | endif
   autocmd BufNewFile,BufReadPost *.turbo_stream.erb
         \ if &filetype !=# 'eruby.html' | set filetype=eruby.html | endif
